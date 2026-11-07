@@ -7,10 +7,13 @@
 #   ./scripts/passo5-timeout.sh timeout-10s
 set -uo pipefail
 cd "$(dirname "$0")/.."
+source scripts/_comum.sh
 mkdir -p evidencias
 rotulo="${1:?informe o rótulo: timeout-3s ou timeout-10s}"
 saida="evidencias/05-$rotulo.txt"
 URL="${SAM_API_URL:-http://127.0.0.1:3000}/guias"
+command -v curl >/dev/null || { echo "ERRO: curl não encontrado." >&2; exit 1; }
+checar_api "$URL"
 
 {
   echo "== demorar=true ($rotulo) - $(date '+%Y-%m-%d %H:%M:%S') =="

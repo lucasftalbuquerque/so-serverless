@@ -46,6 +46,16 @@ sem conta na AWS. O Caminho B (Lambda na nuvem) é opcional e não foi feito.
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) (`sam --version`)
 - Python 3.12
 - No Windows, use o **Git Bash** ou o **WSL** para os comandos funcionarem como estão escritos.
+- No Git Bash, o SAM instalado pelo MSI do Windows às vezes só responde como `sam.cmd`
+  (`bash: sam: command not found`). Se acontecer, rode uma vez por terminal:
+
+  ```bash
+  alias sam=sam.cmd
+  ```
+
+  Os scripts de `scripts/` já procuram `sam`, `sam.cmd` e a pasta padrão de instalação
+  sozinhos, e param com uma mensagem de erro se não acharem o SAM, se o Docker estiver
+  fechado ou se a API local não estiver no ar.
 
 ## Como rodar
 

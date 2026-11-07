@@ -5,10 +5,13 @@
 # Uso: ./scripts/passo4-curl.sh sem-warm   |   ./scripts/passo4-curl.sh lazy
 set -uo pipefail
 cd "$(dirname "$0")/.."
+source scripts/_comum.sh
 mkdir -p evidencias
 rotulo="${1:?informe o rótulo: sem-warm ou lazy}"
 saida="evidencias/04-curl-$rotulo.txt"
 URL="${SAM_API_URL:-http://127.0.0.1:3000}/guias"
+command -v curl >/dev/null || { echo "ERRO: curl não encontrado." >&2; exit 1; }
+checar_api "$URL"
 
 echo "== start-api ($rotulo) - $(date '+%Y-%m-%d %H:%M:%S') ==" | tee "$saida"
 for i in 1 2 3; do

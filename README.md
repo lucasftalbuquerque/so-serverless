@@ -1,130 +1,239 @@
-# so-serverless
+# so-serverless · Guia de transporte do Rota Vital
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+Atividade individual 1 (Serverless) · Infraestrutura de Software · ADS · CESAR School · 2026.2
 
-- hello_world - Code for the application's Lambda function.
-- events - Invocation events that you can use to invoke the function.
-- tests - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
+Uma função serverless que gera a **guia de transporte** de uma requisição do Rota Vital.
+Ela é acionada de dois jeitos: por **evento** (`sam local invoke`) e por **HTTP**
+(`POST /guias` via `sam local start-api`). Com ela observei o cold start, o
+reaproveitamento do ambiente, a falta de estado garantido entre chamadas e o limite
+de tempo de execução.
 
-The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+## Caminho escolhido
 
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
+**Caminho A: AWS SAM CLI local**, com Docker e Python 3.12. Tudo roda no computador,
+sem conta na AWS. O Caminho B (Lambda na nuvem) é opcional e não foi feito.
 
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
+## Estrutura
 
-## Deploy the sample application
+```
+.
+├── template.yaml          # Função + evento Api (POST /guias) e Timeout em Globals
+├── samconfig.toml         # Config do SAM (sem warm containers por padrão)
+├── hello_world/app.py     # Handler (lambda_handler)
+├── events/
+│   ├── pedido.json            # Evento do Passo 3 (R-001), gerado pelo SAM
+│   ├── pedido-demorado.json   # R-003 com demorar=true
+│   └── pedido-invalido.json   # Sem requisicaoId (deve dar 400)
+├── scripts/               # Passos 3, 4 e 5 com saída salva em evidencias/
+├── evidencias/            # Saídas (.txt) e prints (.png) dos comandos
+└── tests/                 # Testes unitários e de integração (pytest)
+```
 
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
+## Mudanças em relação ao enunciado
 
-To use the SAM CLI, you need the following tools.
+1. **Decodificação do body em base64.** O `sam local generate-event apigateway aws-proxy`
+   grava o `body` em base64 e marca `"isBase64Encoded": true`. O `json.loads` do handler
+   original quebraria no Passo 3. Por isso o handler decodifica o body quando esse campo
+   é `true`. O resto do código é o do enunciado.
+2. **`warm_containers = "EAGER"` removido do `samconfig.toml`.** O `sam init` gera esse
+   padrão para o `start-api`. Com ele, o container já seria reaproveitado sem passar
+   nenhuma flag e o Passo 4 não mostraria diferença entre "sem" e "com"
+   `--warm-containers`.
 
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* [Python 3 installed](https://www.python.org/downloads/)
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+## Pré-requisitos
 
-To build and deploy your application for the first time, run the following in your shell:
+- [Docker Desktop](https://docs.docker.com/get-started/get-docker) aberto e rodando
+- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) (`sam --version`)
+- Python 3.12
+- No Windows, use o **Git Bash** ou o **WSL** para os comandos funcionarem como estão escritos.
+
+## Como rodar
+
+### Passo 3: invocar com evento
 
 ```bash
-sam build --use-container
-sam deploy --guided
+sam build
+sam local invoke -e events/pedido.json     # 1ª vez
+sam local invoke -e events/pedido.json     # 2ª vez
 ```
 
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
-
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
-
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
-
-## Use the SAM CLI to build and test locally
-
-Build your application with the `sam build --use-container` command.
+Ou tudo de uma vez, salvando as saídas e os tempos em `evidencias/`:
 
 ```bash
-so-serverless$ sam build --use-container
+./scripts/passo3-invoke.sh
 ```
 
-The SAM CLI installs dependencies defined in `hello_world/requirements.txt`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
-
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
-
-Run functions locally and invoke them with the `sam local invoke` command.
+Para regerar o evento (como no enunciado):
 
 ```bash
-so-serverless$ sam local invoke HelloWorldFunction --event events/event.json
+sam local generate-event apigateway aws-proxy --method POST --path guias \
+    --body '{"requisicaoId":"R-001","hospital":"H-Recife","bolsas":["O-NEG-0142"]}' \
+    > events/pedido.json
 ```
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+### Passo 4: acionar por HTTP
+
+Terminal 1:
 
 ```bash
-so-serverless$ sam local start-api
-so-serverless$ curl http://localhost:3000/
+sam local start-api
 ```
 
-The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
-
-```yaml
-      Events:
-        HelloWorld:
-          Type: Api
-          Properties:
-            Path: /hello
-            Method: get
-```
-
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
-
-## Fetch, tail, and filter Lambda function logs
-
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
-
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
+Terminal 2, três chamadas:
 
 ```bash
-so-serverless$ sam logs -n HelloWorldFunction --stack-name "so-serverless" --tail
+curl -X POST http://127.0.0.1:3000/guias -H "Content-Type: application/json" \
+    -d '{"requisicaoId":"R-002","hospital":"H-Caruaru"}'
+# ou: ./scripts/passo4-curl.sh sem-warm
 ```
 
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
-
-## Tests
-
-Tests are defined in the `tests` folder in this project. Use PIP to install the test dependencies and run tests.
+Pare o servidor (Ctrl+C), suba de novo com containers aquecidos e repita:
 
 ```bash
-so-serverless$ pip install -r tests/requirements.txt --user
-# unit test
-so-serverless$ python -m pytest tests/unit -v
-# integration test, requiring deploying the stack first.
-# Create the env variable AWS_SAM_STACK_NAME with the name of the stack we are testing
-so-serverless$ AWS_SAM_STACK_NAME="so-serverless" python -m pytest tests/integration -v
+sam local start-api --warm-containers LAZY
+./scripts/passo4-curl.sh lazy
 ```
 
-## Cleanup
+### Passo 5: limite de tempo
 
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
+Com o `start-api` no ar e `Timeout: 3` no `template.yaml`:
 
 ```bash
-sam delete --stack-name "so-serverless"
+curl -X POST http://127.0.0.1:3000/guias -H "Content-Type: application/json" \
+    -d '{"requisicaoId":"R-003","demorar":true}'
+# ou: ./scripts/passo5-timeout.sh timeout-3s
 ```
 
-## Resources
+Depois troque `Timeout: 3` por `Timeout: 10` em `Globals` no `template.yaml`, rode
+`sam build`, reinicie o `start-api` e repita (`./scripts/passo5-timeout.sh timeout-10s`).
 
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
+Também dá para testar por evento: `sam local invoke -e events/pedido-demorado.json`.
 
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+### Testes
+
+```bash
+pip install -r tests/requirements.txt
+python -m pytest tests/unit            # não precisa de Docker
+python -m pytest tests/integration     # precisa do sam local start-api no ar
+```
+
+## Resultados
+
+> Preencher com os valores medidos (estão em `evidencias/`).
+
+| Experimento | Resultado |
+|---|---|
+| `sam local invoke` 1ª vez | ⟨tempo⟩ s · Init Duration ⟨…⟩ ms |
+| `sam local invoke` 2ª vez | ⟨tempo⟩ s · Init Duration ⟨…⟩ ms |
+| `start-api` sem warm containers | `invocacaoNesteAmbiente`: ⟨…, …, …⟩ |
+| `start-api --warm-containers LAZY` | `invocacaoNesteAmbiente`: ⟨…, …, …⟩ |
+| `demorar=true` com `Timeout: 3` | ⟨mensagem de erro / status HTTP⟩ |
+| `demorar=true` com `Timeout: 10` | ⟨status HTTP e tempo⟩ |
+
+## Respostas
+
+> Rascunho: reescrever com as minhas palavras e conferir com o que observei nos testes.
+
+**1. Por que a primeira invocação demorou mais que a segunda? O que acontece na fase de Init?**
+
+Na fase de Init o Lambda prepara o ambiente de execução antes de rodar o handler.
+Ele cria o ambiente isolado (na AWS, uma microVM Firecracker; no SAM local, um container
+Docker), baixa e descompacta o código e inicia o runtime do Python. Depois importa o
+módulo `app.py` e roda tudo que está fora do handler, como os `import` e `contador = 0`.
+Só então chama o `lambda_handler`. Isso é o **cold start**, e o log mostra o tempo dessa
+fase em `Init Duration`.
+
+No `sam local invoke`, cada execução cria um container novo, então as duas invocações
+passam pelo Init e as duas retornam `invocacaoNesteAmbiente: 1`. A primeira demora mais
+principalmente porque o SAM ainda precisa baixar e preparar a imagem
+`public.ecr.aws/lambda/python:3.12`. Na segunda, a imagem já está em cache. Na nuvem, uma
+segunda chamada pouco depois da primeira cai num ambiente **quente**: o Init não roda de
+novo e só o handler executa.
+
+**2. O que o campo `invocacaoNesteAmbiente` mostrou com e sem `--warm-containers`? O que isso diz sobre guardar estado numa variável global da função?**
+
+Sem `--warm-containers`, cada requisição subiu um container novo e o campo veio sempre
+`1`: a variável global nasceu zerada a cada chamada. Com `--warm-containers LAZY`, o
+container foi criado na primeira requisição e reaproveitado nas seguintes, e o campo
+mostrou `1`, `2`, `3`. O módulo continuou carregado na memória entre as chamadas.
+
+Então uma variável global **não é um lugar confiável para guardar estado**. Ela só
+sobrevive enquanto o mesmo ambiente for reaproveitado, e quem decide isso é a plataforma.
+Com várias chamadas ao mesmo tempo, o Lambda cria vários ambientes, cada um com o seu
+contador. O ambiente também pode ser descartado a qualquer momento. A global serve para
+cache (conexão com banco, configuração já lida), mas o estado de negócio, como guias e
+requisições, precisa ficar num serviço externo (DynamoDB, RDS, S3, Redis).
+
+**3. O que aconteceu com `demorar = true`? Qual é o tempo máximo de uma execução no Lambda, e o que fazer com um trabalho mais longo?**
+
+Com `Timeout: 3`, a função foi interrompida aos 3 segundos, antes de terminar o
+`time.sleep(5)`. O SAM registrou que a função passou do tempo limite (`Function ...
+timed out after 3 seconds`) e a API respondeu com erro (502) em vez da guia. Com
+`Timeout: 10`, a função dormiu 5 s e devolveu a guia normalmente (201).
+
+O tempo máximo de uma execução no Lambda é **900 segundos (15 minutos)**. Para um
+trabalho mais longo dá para:
+
+- quebrar o trabalho em etapas menores e orquestrá-las com **AWS Step Functions**;
+- processar de forma assíncrona: a função recebe o pedido, coloca numa fila
+  (**SQS**) e responde na hora, e outras funções processam pedaços menores;
+- usar um serviço sem esse limite, como **ECS/Fargate** ou **AWS Batch**, para
+  processamentos pesados ou contínuos.
+
+**4. Quanto custa um milhão de execuções desta função com 128 MB e 100 ms?**
+
+Preços de us-east-1 da aula: US$ 0,20 por milhão de requisições e
+US$ 0,0000166667 por GB-s.
+
+```
+Requisições:  1.000.000 × (US$ 0,20 / 1.000.000)          = US$ 0,20
+
+Computação:   memória   = 128 MB = 128 / 1024 GB           = 0,125 GB
+              duração   = 100 ms                           = 0,1 s
+              por exec. = 0,125 GB × 0,1 s                 = 0,0125 GB-s
+              total     = 0,0125 GB-s × 1.000.000          = 12.500 GB-s
+              custo     = 12.500 × US$ 0,0000166667        ≈ US$ 0,2083
+
+Total:        US$ 0,20 + US$ 0,2083                        ≈ US$ 0,41
+```
+
+Um milhão de execuções custam cerca de **US$ 0,41**. Dentro da faixa sempre gratuita
+(1 milhão de requisições e 400 mil GB-s por mês) o custo seria **zero**, porque
+12.500 GB-s estão bem abaixo de 400.000 GB-s.
+
+**5. Em que parte do Rota Vital uma função assim faria sentido, e em qual não faria?**
+
+*Faria sentido* em tarefas curtas, sem estado e disparadas por evento: gerar a guia
+de transporte quando uma requisição de bolsas é aprovada, enviar notificação ao
+hospital e ao motorista, validar um pedido recebido por API ou gerar o PDF da guia.
+Essas tarefas acontecem de forma irregular, com picos em emergências e quase nada de
+madrugada. O Lambda escala sozinho nos picos e não cobra nada quando está parado.
+
+*Não faria sentido* no acompanhamento em tempo real do transporte, com conexão aberta
+(WebSocket) recebendo a posição do veículo o tempo todo, nem em processos longos ou
+contínuos, como uma reconciliação grande de estoque, que passariam dos 15 minutos.
+Também não serviria para guardar estado em memória, como o estoque de bolsas de um
+hemocentro. Nesses casos, o limite de tempo, o cold start e a falta de estado
+atrapalham. Um serviço sempre ligado (container/ECS) com um banco de dados combina mais.
+
+## Uso de IA
+
+Declaração conforme a PO-CESAR-021.
+
+- **Ferramenta:** Claude (Anthropic).
+- **Finalidade:** montar a estrutura do projeto a partir do `sam init`, ajustar o
+  `template.yaml` para `POST /guias`, identificar dois problemas no fluxo do enunciado
+  (body em base64 no evento gerado e `warm_containers = "EAGER"` no `samconfig.toml`),
+  escrever os testes, os scripts de evidência, o rascunho do README e o rascunho das
+  respostas e da conta de custo.
+- **Como validei:** ⟨descrever: rodei `sam build`, `sam local invoke` e `start-api` na
+  minha máquina; conferi os tempos e o campo `invocacaoNesteAmbiente` com as saídas em
+  `evidencias/`; refiz a conta de custo à mão; li a documentação de ciclo de vida e de
+  cotas do Lambda; reescrevi as respostas com as minhas palavras⟩.
+
+## Referências
+
+- [Ciclo de vida do ambiente de execução do Lambda](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html)
+- [Cotas do Lambda](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
+- [Preços do Lambda](https://aws.amazon.com/lambda/pricing/)
+- [Instalação do SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)

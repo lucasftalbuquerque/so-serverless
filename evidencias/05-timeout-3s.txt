@@ -1,5 +1,0 @@
-== demorar=true (timeout-3s) - 2026-11-07 12:13:40 ==
-11:    Timeout: 3
-{"message":"Internal server error"}
-
-HTTP 502 em 8.115360 s

@@ -1,4 +1,0 @@
-== demorar=true (timeout-10s) - 2026-11-07 12:16:08 ==
-11:    Timeout: 10
-{"guia": "G-R-003", "hospital": null, "bolsas": [], "invocacaoNesteAmbiente": 4}
-HTTP 201 em 6.074894 s

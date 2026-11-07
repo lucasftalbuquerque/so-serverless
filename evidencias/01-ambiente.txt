@@ -1,0 +1,4 @@
+== Ambiente (2026-11-07 12:00:14) ==
+SAM CLI, version 1.171.0
+Docker version 29.9.1, build dfc520d
+Python 3.12.10

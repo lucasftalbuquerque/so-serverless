@@ -106,7 +106,9 @@ sam local start-api --warm-containers LAZY
 
 ### Passo 5: limite de tempo
 
-Com o `start-api` no ar e `Timeout: 3` no `template.yaml`:
+O `template.yaml` começou com `Timeout: 3` e hoje está com `Timeout: 10` (veja o
+histórico do git). Para reproduzir o erro, volte `Timeout` para `3` em `Globals`, rode
+`sam build`, suba o `start-api` e chame:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/guias -H "Content-Type: application/json" \
@@ -114,8 +116,8 @@ curl -X POST http://127.0.0.1:3000/guias -H "Content-Type: application/json" \
 # ou: ./scripts/passo5-timeout.sh timeout-3s
 ```
 
-Depois troque `Timeout: 3` por `Timeout: 10` em `Globals` no `template.yaml`, rode
-`sam build`, reinicie o `start-api` e repita (`./scripts/passo5-timeout.sh timeout-10s`).
+Depois volte para `Timeout: 10`, rode `sam build`, reinicie o `start-api` e repita
+(`./scripts/passo5-timeout.sh timeout-10s`).
 
 Também dá para testar por evento: `sam local invoke -e events/pedido-demorado.json`.
 
@@ -129,16 +131,17 @@ python -m pytest tests/integration     # precisa do sam local start-api no ar
 
 ## Resultados
 
-> Preencher com os valores medidos (estão em `evidencias/`).
+Medido em 07/11/2026 no Windows (Git Bash), SAM CLI 1.171.0, Docker 29.9.1 e
+Python 3.12.10. As saídas completas estão em `evidencias/`.
 
 | Experimento | Resultado |
 |---|---|
-| `sam local invoke` 1ª vez | ⟨tempo⟩ s · Init Duration ⟨…⟩ ms |
-| `sam local invoke` 2ª vez | ⟨tempo⟩ s · Init Duration ⟨…⟩ ms |
-| `start-api` sem warm containers | `invocacaoNesteAmbiente`: ⟨…, …, …⟩ |
-| `start-api --warm-containers LAZY` | `invocacaoNesteAmbiente`: ⟨…, …, …⟩ |
-| `demorar=true` com `Timeout: 3` | ⟨mensagem de erro / status HTTP⟩ |
-| `demorar=true` com `Timeout: 10` | ⟨status HTTP e tempo⟩ |
+| `sam local invoke` 1ª vez | 102,2 s no total (o SAM montou a imagem `python:3.12-rapid`) · handler 54,16 ms · `invocacaoNesteAmbiente: 1` |
+| `sam local invoke` 2ª vez | 29,2 s no total (imagem já pronta) · handler 48,31 ms · `invocacaoNesteAmbiente: 1` |
+| `start-api` sem warm containers | `invocacaoNesteAmbiente`: 1, 1, 1 · 2,13 s / 1,82 s / 1,81 s · um container novo por chamada |
+| `start-api --warm-containers LAZY` | `invocacaoNesteAmbiente`: 1, 2, 3 · 3,86 s / 1,04 s / 1,06 s · o mesmo container |
+| `demorar=true` com `Timeout: 3` | HTTP 502 `{"message":"Internal server error"}` em 8,1 s (função interrompida aos 3 s) |
+| `demorar=true` com `Timeout: 10` | HTTP 201 com a guia `G-R-003` em 6,1 s · `invocacaoNesteAmbiente: 4` (mesmo container quente) |
 
 ## Respostas
 
@@ -154,18 +157,23 @@ Só então chama o `lambda_handler`. Isso é o **cold start**, e o log mostra o 
 fase em `Init Duration`.
 
 No `sam local invoke`, cada execução cria um container novo, então as duas invocações
-passam pelo Init e as duas retornam `invocacaoNesteAmbiente: 1`. A primeira demora mais
-principalmente porque o SAM ainda precisa baixar e preparar a imagem
-`public.ecr.aws/lambda/python:3.12`. Na segunda, a imagem já está em cache. Na nuvem, uma
+passam pelo Init e as duas retornaram `invocacaoNesteAmbiente: 1`. A primeira levou
+102 s porque o SAM ainda precisou baixar e montar a imagem
+`public.ecr.aws/lambda/python:3.12-rapid-x86_64`. Na segunda, com a imagem pronta, foram
+29 s, quase tudo para subir o container. O handler em si levou cerca de 50 ms nas duas.
+O emulador local não mede o Init de verdade (mostrou `Init Duration` de 0,04 ms), então
+a diferença aparece no tempo total, não nesse campo. Na nuvem, uma
 segunda chamada pouco depois da primeira cai num ambiente **quente**: o Init não roda de
 novo e só o handler executa.
 
 **2. O que o campo `invocacaoNesteAmbiente` mostrou com e sem `--warm-containers`? O que isso diz sobre guardar estado numa variável global da função?**
 
 Sem `--warm-containers`, cada requisição subiu um container novo e o campo veio sempre
-`1`: a variável global nasceu zerada a cada chamada. Com `--warm-containers LAZY`, o
-container foi criado na primeira requisição e reaproveitado nas seguintes, e o campo
-mostrou `1`, `2`, `3`. O módulo continuou carregado na memória entre as chamadas.
+`1` (1, 1, 1): a variável global nasceu zerada a cada chamada. Com
+`--warm-containers LAZY`, o container foi criado na primeira requisição (3,9 s) e
+reaproveitado nas seguintes (cerca de 1 s cada), e o campo mostrou 1, 2, 3. A chamada
+seguinte, com `demorar=true`, ainda caiu no mesmo container e veio com `4`. O módulo
+continuou carregado na memória entre as chamadas.
 
 Então uma variável global **não é um lugar confiável para guardar estado**. Ela só
 sobrevive enquanto o mesmo ambiente for reaproveitado, e quem decide isso é a plataforma.
@@ -177,9 +185,10 @@ requisições, precisa ficar num serviço externo (DynamoDB, RDS, S3, Redis).
 **3. O que aconteceu com `demorar = true`? Qual é o tempo máximo de uma execução no Lambda, e o que fazer com um trabalho mais longo?**
 
 Com `Timeout: 3`, a função foi interrompida aos 3 segundos, antes de terminar o
-`time.sleep(5)`. O SAM registrou que a função passou do tempo limite (`Function ...
-timed out after 3 seconds`) e a API respondeu com erro (502) em vez da guia. Com
-`Timeout: 10`, a função dormiu 5 s e devolveu a guia normalmente (201).
+`time.sleep(5)`. O SAM registrou no terminal do `start-api` que a função passou do tempo
+limite, e a API respondeu `HTTP 502 {"message":"Internal server error"}` em vez da guia.
+Com `Timeout: 10`, a função dormiu 5 s e devolveu a guia `G-R-003` normalmente
+(`HTTP 201` em 6,1 s).
 
 O tempo máximo de uma execução no Lambda é **900 segundos (15 minutos)**. Para um
 trabalho mais longo dá para:

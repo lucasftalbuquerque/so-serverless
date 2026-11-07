@@ -1,0 +1,28 @@
+
+	SAM CLI now collects telemetry to better understand customer needs.
+
+	You can OPT OUT and disable telemetry collection by setting the
+	environment variable SAM_CLI_TELEMETRY=0 in your shell.
+	Thanks for your help!
+
+	Learn More: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html
+
+Starting Build use cache
+Manifest file is changed (new hash: 3298f13049d19cffaa37ca931dd4d421) or dependency folder (.aws-sam\deps\85afec46-d75a-42f8-a1b4-300967d87d3f) is missing for (HelloWorldFunction), downloading dependencies and copying/building source
+Building codeuri: C:\Users\PC\Desktop\so-serverless\hello_world runtime: python3.12 architecture: x86_64 functions: HelloWorldFunction
+ Running PythonPipBuilder:CleanUp
+ Running PythonPipBuilder:ResolveDependencies
+ Running PythonPipBuilder:CopySource
+ Running PythonPipBuilder:CopySource
+
+Build Succeeded
+
+Built Artifacts  : .aws-sam\build
+Built Template   : .aws-sam\build\template.yaml
+
+Commands you can use next
+=========================
+[*] Validate SAM template: sam validate
+[*] Invoke Function: sam local invoke
+[*] Test Function in the Cloud: sam sync --stack-name {{stack-name}} --watch
+[*] Deploy: sam deploy --guided

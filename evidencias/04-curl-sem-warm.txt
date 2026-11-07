@@ -1,0 +1,10 @@
+== start-api (sem-warm) - 2026-11-07 12:12:23 ==
+-- chamada 1
+{"guia": "G-R-002", "hospital": "H-Caruaru", "bolsas": [], "invocacaoNesteAmbiente": 1}
+HTTP 201 em 2.131275 s
+-- chamada 2
+{"guia": "G-R-002", "hospital": "H-Caruaru", "bolsas": [], "invocacaoNesteAmbiente": 1}
+HTTP 201 em 1.815585 s
+-- chamada 3
+{"guia": "G-R-002", "hospital": "H-Caruaru", "bolsas": [], "invocacaoNesteAmbiente": 1}
+HTTP 201 em 1.811567 s

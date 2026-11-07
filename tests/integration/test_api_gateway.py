@@ -1,45 +1,33 @@
+"""Testes contra a API local (sam local start-api).
+
+Suba a API antes:  sam build && sam local start-api
+A URL pode ser trocada com a variável SAM_API_URL (padrão http://127.0.0.1:3000).
+"""
 import os
 
-import boto3
 import pytest
 import requests
 
-"""
-Make sure env variable AWS_SAM_STACK_NAME exists with the name of the stack we are going to test. 
-"""
+URL = os.environ.get("SAM_API_URL", "http://127.0.0.1:3000").rstrip("/") + "/guias"
 
 
-class TestApiGateway:
+@pytest.fixture(scope="module", autouse=True)
+def api_no_ar():
+    try:
+        requests.post(URL, json={"requisicaoId": "PING"}, timeout=60)
+    except requests.exceptions.ConnectionError:
+        pytest.skip(f"API local não está rodando em {URL}")
 
-    @pytest.fixture()
-    def api_gateway_url(self):
-        """ Get the API Gateway URL from Cloudformation Stack outputs """
-        stack_name = os.environ.get("AWS_SAM_STACK_NAME")
 
-        if stack_name is None:
-            raise ValueError('Please set the AWS_SAM_STACK_NAME environment variable to the name of your stack')
+def test_post_guias_cria_guia():
+    r = requests.post(URL, json={"requisicaoId": "R-002", "hospital": "H-Caruaru"}, timeout=60)
+    assert r.status_code == 201
+    corpo = r.json()
+    assert corpo["guia"] == "G-R-002"
+    assert corpo["hospital"] == "H-Caruaru"
+    assert corpo["invocacaoNesteAmbiente"] >= 1
 
-        client = boto3.client("cloudformation")
 
-        try:
-            response = client.describe_stacks(StackName=stack_name)
-        except Exception as e:
-            raise Exception(
-                f"Cannot find stack {stack_name} \n" f'Please make sure a stack with the name "{stack_name}" exists'
-            ) from e
-
-        stacks = response["Stacks"]
-        stack_outputs = stacks[0]["Outputs"]
-        api_outputs = [output for output in stack_outputs if output["OutputKey"] == "HelloWorldApi"]
-
-        if not api_outputs:
-            raise KeyError(f"HelloWorldAPI not found in stack {stack_name}")
-
-        return api_outputs[0]["OutputValue"]  # Extract url from stack outputs
-
-    def test_api_gateway(self, api_gateway_url):
-        """ Call the API Gateway endpoint and check the response """
-        response = requests.get(api_gateway_url)
-
-        assert response.status_code == 200
-        assert response.json() == {"message": "hello world"}
+def test_post_guias_sem_requisicao_id_retorna_400():
+    r = requests.post(URL, json={"hospital": "H-Caruaru"}, timeout=60)
+    assert r.status_code == 400

@@ -145,8 +145,6 @@ Python 3.12.10. As saídas completas estão em `evidencias/`.
 
 ## Respostas
 
-> Rascunho: reescrever com as minhas palavras e conferir com o que observei nos testes.
-
 **1. Por que a primeira invocação demorou mais que a segunda? O que acontece na fase de Init?**
 
 Na fase de Init o Lambda prepara o ambiente de execução antes de rodar o handler.
